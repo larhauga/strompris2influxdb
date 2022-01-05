@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: strompris2influxdb
+spec:
+  schedule: "17 14 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: strompris2influxdb
+            image: ghcr.io/larhauga/strompris2influxdb:master
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: POWERZONE
+              value: "NO1"
+            - name: INFLUXDB_URL
+              value: "http://influxdb.int.larshaugan.net"
+            - name: INFLUXDB_ORG
+              value: "db"
+            - name: INFLUXDB_BUCKET
+              value: "power"
+            - name: INFLUXDB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: TOKEN
+                  name: influxdb
+          restartPolicy: OnFailure

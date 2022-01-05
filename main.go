@@ -21,8 +21,8 @@ type Hour struct {
 	ValidTo   time.Time `json:"valid_to"`
 }
 
-func getPower(date string) (*map[string]Hour, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://norway-power.ffail.win/?zone=NO1&date=%s", date), nil)
+func getPower(date, zone string) (*map[string]Hour, error) {
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://norway-power.ffail.win/?zone=%s&date=%s", zone, date), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func getPower(date string) (*map[string]Hour, error) {
 	return &data, nil
 }
 
-func bulk(client influxdb2.Client, org, fromDate, toDate string) error {
+func bulk(client influxdb2.Client, org, fromDate, toDate, zone string) error {
 	start, err := time.Parse("2006-1-2", "2021-06-01")
 	if err != nil {
 		log.Fatal("could not parse ", err)
@@ -63,7 +63,7 @@ func bulk(client influxdb2.Client, org, fromDate, toDate string) error {
 			break
 		}
 		fmt.Printf("looking up spot prices for %s", d.Format("2006-01-02"))
-		hours, err := getPower(d.Format("2006-01-02"))
+		hours, err := getPower(d.Format("2006-01-02"), zone)
 		if err != nil {
 			return err
 		}
@@ -92,10 +92,11 @@ func bulk(client influxdb2.Client, org, fromDate, toDate string) error {
 func main() {
 	nextDay := time.Now().Add(24 * time.Hour).Format("2006-01-02")
 
-	org := "db"
-	token := os.Getenv("TOKEN")
-	// Store the URL of your InfluxDB instance
-	url := "http://influxdb.int.larshaugan.net"
+	zone := os.Getenv("POWERZONE")
+	org := os.Getenv("INFLUXDB_ORG")
+	token := os.Getenv("INFLUXDB_TOKEN")
+	url := os.Getenv("INFLUXDB_URL")
+
 	client := influxdb2.NewClient(url, token)
 	queryAPI := client.QueryAPI(org)
 	result, err := queryAPI.Query(context.TODO(), fmt.Sprintf(`
@@ -122,7 +123,7 @@ func main() {
 		}
 	}
 	log.Printf("Gathering data for next day: %s", nextDay)
-	hours, err := getPower(nextDay)
+	hours, err := getPower(nextDay, zone)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -139,7 +140,7 @@ func main() {
 		points = append(points, p)
 	}
 
-	bucket := "power"
+	bucket := os.Getenv("INFLUXDB_BUCKET")
 	writeAPI := client.WriteAPIBlocking(org, bucket)
 	err = writeAPI.WritePoint(context.TODO(), points...)
 	if err != nil {
